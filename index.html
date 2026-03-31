@@ -94,7 +94,6 @@
     }
     .task-text { flex: 1; font-size: 15px; }
 
-    /* Icon Buttons */
     .icon-btn {
       background: none; 
       border: none; 
@@ -111,7 +110,6 @@
     .edit-btn { color: #6366f1; }
     .delete-btn { color: #ef4444; }
 
-    /* Inline Edit Input */
     .edit-input {
       flex: 1;
       padding: 6px 10px;
@@ -120,7 +118,6 @@
       border-radius: 8px;
     }
 
-    /* Bottom Action Bar */
     .action-bar {
       padding: 14px 20px;
       background: #f8fafc;
@@ -166,7 +163,6 @@
 
     <div class="todo-list" id="todoList"></div>
 
-    <!-- Bottom Action Bar -->
     <div class="action-bar">
       <button id="deleteSelectedBtn" class="danger">Delete Selected</button>
       <button id="clearCompletedBtn" class="danger">Clear All Completed</button>
@@ -177,13 +173,13 @@
   <script src="https://apis.google.com/js/api.js" async defer></script>
 
   <script>
-    const CLIENT_ID = '761538208665-c1aj3m7to7ouqikscteh8fqqao27f14m.apps.googleusercontent.com';
+    const CLIENT_ID = '761538208665-c1aj3m7to7ouqikscteh8fqqao27f14m.apps.googleusercontent.com';   // ← Replace with your real Client ID
     const FILE_NAME = 'todos.json';
     let tokenClient, accessToken = null;
     let tasks = [];
     let editingId = null;
 
-    // ====================== Google Auth ======================
+    // Google Auth
     function initGoogle() {
       google.accounts.id.initialize({
         client_id: CLIENT_ID,
@@ -207,11 +203,11 @@
         { theme: "filled_blue", size: "medium", text: "signin_with" });
     }
 
-    async function handleCredentialResponse(response) {
+    async function handleCredentialResponse() {
       tokenClient.requestAccessToken();
     }
 
-    // ====================== Google Drive ======================
+    // Google Drive Functions
     async function loadFromDrive() {
       if (!accessToken) return;
       try {
@@ -221,14 +217,20 @@
         const data = await res.json();
         const fileId = data.files?.[0]?.id;
 
-        if (!fileId) { tasks = []; renderTasks(); return; }
+        if (!fileId) {
+          tasks = [];
+          renderTasks();
+          return;
+        }
 
         const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
         tasks = fileRes.ok ? await fileRes.json() : [];
         renderTasks();
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error("Load error:", e);
+      }
     }
 
     async function saveToDrive() {
@@ -252,7 +254,9 @@
           headers: { Authorization: `Bearer ${accessToken}` },
           body: form
         });
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error("Save error:", e);
+      }
     }
 
     async function getFileId() {
@@ -263,7 +267,7 @@
       return data.files?.[0]?.id || null;
     }
 
-    // ====================== Todo Functions ======================
+    // Todo Core Functions
     function generateId() {
       return 'task_' + Date.now() + Math.random().toString(36).substr(2, 5);
     }
@@ -304,24 +308,21 @@
         div.dataset.id = task.id;
 
         if (editingId === task.id) {
-          // Inline Edit Mode
           div.innerHTML = `
             <input type="text" class="edit-input" value="${task.text}" autofocus>
             <button class="icon-btn" style="color:#10b981">Save</button>
             <button class="icon-btn delete-btn">Cancel</button>
           `;
 
-          const editInput = div.querySelector(".edit-input");
-          editInput.focus();
-          editInput.select();
+          const input = div.querySelector(".edit-input");
+          input.focus();
+          input.select();
 
           div.querySelectorAll("button")[0].onclick = () => {
-            const newText = editInput.value.trim();
-            if (newText) {
-              task.text = newText;
-              saveToDrive();
-            }
+            const newText = input.value.trim();
+            if (newText) task.text = newText;
             editingId = null;
+            saveToDrive();
             renderTasks(document.getElementById("searchInput").value);
           };
 
@@ -330,7 +331,6 @@
             renderTasks(document.getElementById("searchInput").value);
           };
         } else {
-          // Normal View
           div.innerHTML = `
             <input type="checkbox" ${task.completed ? 'checked' : ''}>
             <span class="task-text">${task.text}</span>
@@ -339,7 +339,7 @@
           `;
 
           div.querySelector("input[type='checkbox']").onchange = () => toggleComplete(task.id);
-          div.querySelector(".edit-btn").onclick = () => startEditing(task.id);
+          div.querySelector(".edit-btn").onclick = () => { editingId = task.id; renderTasks(document.getElementById("searchInput").value); };
           div.querySelector(".delete-btn").onclick = () => deleteTask(task.id);
         }
 
@@ -355,11 +355,6 @@
 
       setupDragAndDrop(container);
       updateStats();
-    }
-
-    function startEditing(id) {
-      editingId = id;
-      renderTasks(document.getElementById("searchInput").value);
     }
 
     function toggleComplete(id) {
@@ -402,19 +397,15 @@
       document.getElementById("completedCount").textContent = `${completed} completed`;
     }
 
-    // Drag & Drop Setup
+    // Drag & Drop
     function setupDragAndDrop(container) {
       container.addEventListener("dragover", e => {
         e.preventDefault();
         const dragging = document.querySelector(".dragging");
         if (!dragging) return;
-
         const afterElement = getDragAfterElement(container, e.clientY);
-        if (afterElement) {
-          container.insertBefore(dragging, afterElement);
-        } else {
-          container.appendChild(dragging);
-        }
+        if (afterElement) container.insertBefore(dragging, afterElement);
+        else container.appendChild(dragging);
       });
 
       container.addEventListener("drop", e => {
@@ -424,14 +415,11 @@
     }
 
     function getDragAfterElement(container, y) {
-      const draggableElements = [...container.querySelectorAll(".task:not(.dragging)")];
-      return draggableElements.reduce((closest, child) => {
+      const items = [...container.querySelectorAll(".task:not(.dragging)")];
+      return items.reduce((closest, child) => {
         const box = child.getBoundingClientRect();
         const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        }
-        return closest;
+        return (offset < 0 && offset > closest.offset) ? { offset, element: child } : closest;
       }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
@@ -461,7 +449,7 @@
       document.getElementById("clearCompletedBtn").onclick = clearCompleted;
     }
 
-    // Initialize
+    // Initialize App
     window.onload = () => {
       initGoogle();
       setupListeners();
